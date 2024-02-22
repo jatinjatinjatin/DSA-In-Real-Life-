@@ -1,158 +1,197 @@
-//Hello World of Phaser = Basic Game = Single Scene in Spin & Win Game
-// How to create the basic skeleton for the game -> Game Loop
+    onload = function () {
+    const unit = 16;
+    const move_step = unit * 5;
+    const fly_step = unit * 8;
+    let platforms_array = [];
+    let moves = [];
+    let pos = 0;
+    let firstTime = true;
+    let onGround = true;
+    const game = new Phaser.Game(320, 240, Phaser.AUTO, 'mynetwork');
+    const game_length = 1850;
+    const game_height = game.height;
+    const ground_height = game_height - 2*unit;
+    const result_font = { font:"20px",fill:"#000",align:"center"};
+    const refresh = document.getElementById('generate-problem');
+    refresh.onclick = function () {
+        game.state.start("GameState"); // khudse ek state create kri
+    };
+    var temptext = document.getElementById('temptext');
+        var solve = document.getElementById('solve');
+        let question = "QUESTION";
+    const text = 'You\'ll receive a jumps array as input. Each index stores the maximum islands you can jump ahead from current island. ' +
+        'You need to find least number of moves needed to reach the last island and return jump to be taken on each island.<br>' +
+        'Can you solve it ?<br><br>'+question.bold()+'<br>';
+    const text2 = 'Click on solve to get solution';
 
-let prizes_config = {
-    count:12,
-    prize_names : ["3000 Credits","35% Off","Nothing","70% OFF","Swagpack","100% OFF","Netflix","50% Off","Amazon Voucher","2 Extra Spin", "CB Tshirt","CB Book"]
-}
+    const BootState = {
+        init : function () {
+            game.stage.backgroundColor = '#5c94fc';
+            game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+        },
+        create : function () {
+            this.state.start("PreloadState");
+        }
+    };
 
-let config = {
-    type: Phaser.CANVAS,
-    width: 800,
-    height: 600,
+        const PreloadState = {
+        // preload
+        preload : function () {
+            game.load.spritesheet('mario', 'assets/player.png', 18, 20);
+            game.load.spritesheet('flag', 'assets/flag.png', 33, 168);
+            game.load.image('cloud', 'assets/cloud.png');
+            game.load.image('sun', 'assets/sun.png');
+            game.load.image('tile', 'assets/tile.png');
+            game.load.image('wave', 'assets/wave.png');
+            game.load.image('sea', 'assets/sea.png');
+            },
+        // create
+        create : function () {
+            this.state.start("GameState") // game starts
+        }
+    };
 
-    scene: {
-        preload: preload,
-        create: create,
-        update: update,
-    },
-    audio: {
-        disableWebAudio: false,
+    const GameState = {
+        init: function() {
+            createGame();
+        },
+        update: function() {
+            updateState();
+        }
+    };
+
+    game.state.add("BootState",BootState);
+    game.state.add("PreloadState",PreloadState);
+    game.state.add("GameState",GameState);
+    game.state.start("BootState");
+
+    function createGame() {
+        pos = 0;
+        firstTime = true; // just reached
+        onGround = true;
+        platforms_array = [];
+        game.world.setBounds(0,0,game_length,game_height); // world set starting from x,y to w,h
+        game.physics.startSystem(Phaser.Physics.ARCADE); // laws of motion
+
+        // 30 platforms
+        for(let i=0;i<29;i++){
+            platforms_array.push(Math.floor(Math.random()*3)+1); // value btw 1-3
+        }
+
+        clouds = game.add.group();
+        let change = 15;
+        for (let i = 70; i < game_length; i+= 240) {
+            clouds.create(i, change + ground_height - 8*unit, 'cloud');
+            change *= -1;
+        }
+
+        sun = game.add.sprite(16 * unit, ground_height - 13.5 * unit, 'sun');
+        game.physics.arcade.enable(sun);
+
+        platforms = game.add.group();
+        platforms.enableBody = true;
+        for (i = 0; i < 30; i++) {
+            let pos = i * 60 + 15;
+            let platform = platforms.create(pos, ground_height, 'tile');
+            platform.body.immovable = true;
+            game.add.text(pos + 10, ground_height-40, platforms_array[i], result_font);
+            if(i===29){
+                platform.scale.setTo(2,1);
+            }
+        }
+
+        const ground = game.add.tileSprite(0,ground_height+10, game_length, 6, 'wave');
+        game.physics.arcade.enable(ground);
+        ground.body.immovable = true;
+        game.add.tileSprite(0,ground_height+14, game_length, game.height, 'sea');
+
+        flag = game.add.sprite(1780, ground_height-168, 'flag');
+        flag.animations.add('celebrate');
+
+        player = game.add.sprite(24, ground_height - 20, 'mario');
+        game.physics.arcade.enable(player);
+        player.body.collideWorldBounds = true;
+        player.body.velocity.x = move_step;
+        player.body.enable = false;
+
+        temptext.innerHTML = text + platforms_array.toString() + '<br>' + text2;
     }
+
+    function updateState() {
+        game.physics.arcade.collide(player, platforms, groundOverlap);
+        game.camera.follow(player, Phaser.Camera.FOLLOW_TOPDOWN);
+         // if player movalbe 
+        if (player.body.enable) {
+            if (onGround) {
+                onGround = false;
+                if(pos<moves.length) {
+                    const mul = Math.sqrt(moves[pos]);
+                    const vely = -fly_step * mul;
+                    const velx = move_step * mul;
+                    player.body.velocity.y = vely;
+                    player.body.velocity.x = velx;
+                    player.body.gravity.y = ( 2 * -vely * velx ) / ( 60 * moves[pos] + 1 );
+                    pos++;
+                } else{
+                    if(firstTime){
+                        flag.animations.play('celebrate', 5);
+                        firstTime = false;
+                        sun.body.enable = false;
+                        player.body.velocity.x = 0;
+                    }
+                }
+            }
+
+            if(sun.body.enable && player.body.x > 15*unit){
+                sun.body.velocity.x = player.body.velocity.x;
+            } else{
+                sun.body.velocity.x = 0;
+            }
+        }
+    }
+
+    function groundOverlap() {
+        onGround = true;
+    }
+
+    solve.onclick = function () {
+        if (!player.body.enable){
+            moves = solveProblem(platforms_array);
+            let solution = "SOLUTION"
+            temptext.innerHTML = temptext.innerHTML + "<br><br>" + solution.bold() +"<br>" + moves;
+            player.body.enable = true; // make player movable
+        }
+    };
 };
 
-let game = new Phaser.Game(config);
-
-function preload(){
-    console.log("Preload");
-    //load object, load some images
-    this.load.image('background','../Assets/back.jpg');
-    console.log(this);
-    this.load.image('wheel','../Assets/wheel.png');
-    this.load.image('pin','../Assets/pin.png');
-    this.load.image('stand','../Assets/stand.png');
-    this.load.image('button','../Assets/button.png');
-    this.load.image("ray", "../Assets/ray.png");
-
-    // For Audio
-    this.load.audio('theme', 'assets/oedipus_wizball_highscore.mp3');
-}
-
-function create(){
-    console.log("Create");
-    //create the background image
-    let W = game.config.width;
-    let H = game.config.height;
-
-    let background = this.add.sprite(0,0,'background');
-    background.setPosition(W/2,H/2);
-    background.setScale(0.20);
-
-    // Create rays on top of the Background
-    let rays = [];
-
-    for (let i = -10; i <= 10; i++){
-        let ray = this.add.sprite(W/2, H-300, "ray");
-        ray.displayHeight = 1.2*H;
-        ray.setOrigin(0.5, 1);
-        ray.alpha = 0.2;
-        ray.angle = i*20;
-        rays.push(ray);
+function solveProblem(input_arr){
+    let res = [];
+    
+    for(let i=0;i<30;i++){
+        res.push([-1,-1]);
     }
 
-    // Sunlight Effect Tween
-    this.tweens.add({
-        targets: rays,
-        props: {
-            angle: {
-                value : "+= 200",
-            },
-        },
-        duration: 4000,
-        repeat: -1,
-    });
+    res[29][0] = 0;
 
-    // Creating a button for the spin
-    button_font_style = {
-        font: "bold 35px Arial",
-        align: "center",
-        color: "red",
-    }
-    this.textbutton = this.add.text(W-200, H-50, "Tap to Spin", button_font_style);
-    this.textbutton.setInteractive();
-    
-     //lets create the stand
-    let stand = this.add.sprite(W/2,H/2 + 250,'stand');
-    stand.setScale(0.25);
-    
-    //lets create a pin
-    let pin = this.add.sprite(W/2,H/2-250,"pin");
-    pin.setScale(0.25);
-    pin.depth = 1; // Jitne zada value utni zada dur rahega obj. 0 being max and 0 being min
-    
-    //let create wheel
-    this.wheel = this.add.sprite(W/2,H/2,"wheel");
-    this.wheel.setScale(0.25);  
 
-    //event listener for mouse click
-    this.isSpinning = false;
-    this.textbutton.on('pointerdown', () => {
-        this.input.on("pointerdown", spinwheel, this);
-    });
-    
-
-    //lets create text object
-    font_style = {
-        font: "bold 25px Arial",
-        align: "center",
-        color: "red",
-    }
-    this.game_text = this.add.text(10,10,"Welcome to Spin And Wheel", font_style);
-    
-
-}
-
-//Game Loop
-function update(){
-    console.log("Updating Continously");
-}
-
-function spinwheel(){
-
-    this.textbutton.on('pointerdown', () => { // Button pe click karo then only it'll spin
-        if (this.isSpinning == false){ // To disable spin while already spinning
-            
-            // Audio
-            var music = this.sound.add("theme");
-            music.play();
-           
-            // So that wheel would'nt spin again
-            this.isSpinning = true;
-
-            console.log("You clicked the mouse");
-            console.log("Start spinning");
-            //this.game_text.setText("You clicked the mouse!");
-            
-            let rounds = Phaser.Math.Between(2,4);
-            let degrees = Phaser.Math.Between(0,11)*30; // Take evry prize ke beech me ruke
-            
-            let total_angle = rounds*360 + degrees;
-            console.log(total_angle);
-
-            let idx = prizes_config.count - 1 - Math.floor(degrees/(360/prizes_config.count));
-
-            tween = this.tweens.add({
-                targets: this.wheel,
-                angle: total_angle,
-                ease: "Cubic.easeOut",
-                duration: 6000,
-                callbackScope:this,
-                onComplete:function(){
-                    this.game_text.setText("You Won: " + prizes_config.prize_names[idx]);
-                    this.isSpinning = false; // To spin again
-                    music.stop(); // To stop music
-                },
-            });
+    for(let i=28;i>=0;i--){
+        let mini = 1000;
+        let minj = 100;
+        for(let j=1;j<=input_arr[i]&&i+j<30;j++){
+            if (mini > res[i + j][0]) {
+                mini = res[i + j][0];
+                minj = j;
+            }    
         }
-    });
+        console.log(minj, mini);
+        res[i][0] = mini + 1;
+        res[i][1] = minj;
+    }
+    let ans = [];
+    let start = 0;
+    while(start<29){
+        ans.push(res[start][1]);
+        start += res[start][1];
+    }
+    return ans;
 }
